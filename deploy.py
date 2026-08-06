@@ -88,6 +88,7 @@ env_content = f"""# Runtime environment variables for Agent Engine
 GOOGLE_CLOUD_PROJECT={PROJECT_ID}
 GOOGLE_CLOUD_LOCATION={LOCATION}
 TEMPLATE_NAME={TEMPLATE_NAME}
+GOOGLE_API_PREVENT_AGENT_TOKEN_SHARING_FOR_GCP_SERVICES=false
 """
 
 with open(env_file_path, "w") as f:
@@ -168,6 +169,9 @@ if not agent_engine_id:
                 config={
                     "identity_type": types.IdentityType.AGENT_IDENTITY,
                     "display_name": "Secure Customer Service Agent",
+                    "env_vars": {
+                        "GOOGLE_API_PREVENT_AGENT_TOKEN_SHARING_FOR_GCP_SERVICES": False,
+                    },
                 }
             )
         finally:
@@ -235,10 +239,11 @@ print("Phase 4: Configuring Agent Identity IAM Permissions")
 print("   Granting baseline permissions required for agent to start...")
 print()
 
-# First, try to use the effective_identity from API response
-# Otherwise fall back to constructing it
+# First, check if AGENT_IDENTITY is already set in environment or effective_identity from API response
 try:
-    if effective_identity:
+    if os.environ.get("AGENT_IDENTITY"):
+        agent_identity = os.environ.get("AGENT_IDENTITY")
+    elif effective_identity:
         # The API returns the identity without the "principal://" prefix
         # Add it if not present
         if effective_identity.startswith("principal://"):
@@ -355,7 +360,8 @@ cmd = [
     "adk", "deploy", "agent_engine",
     "--project", PROJECT_ID,
     "--region", LOCATION,
-    "--otel_to_cloud",
+    "--staging_bucket", f"gs://{STAGING_BUCKET}",
+    "--trace_to_cloud",
     "--env_file", env_file_path,
     "--agent_engine_id", agent_engine_id,  # Always update the instance we created/have
 ]
